@@ -99,7 +99,6 @@ export default function ProfileForm({ profile, onSuccess }: ProfileFormProps) {
     setMessage('');
 
     checkProfileCompletion(profileData);
-    const isComplete = missingFields.length === 0;
 
     try {
       const dataToSave = {
