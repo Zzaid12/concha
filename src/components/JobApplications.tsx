@@ -10,8 +10,6 @@ interface JobApplication {
   created_at: string;
   job: {
     title: string;
-    company: string;
-    location: string;
   };
 }
 
@@ -30,17 +28,14 @@ const JobApplications = ({ userId }: JobApplicationsProps) => {
   const fetchApplications = async () => {
     try {
       const { data, error } = await supabase
-        .from('job_applications')
+        .from('applications')
         .select(`
           *,
           job:jobs (
-            title,
-            company,
-            location
+            title
           )
         `)
-        .eq('user_id', userId)
-        .order('created_at', { ascending: false });
+        .eq('user_id', userId);
 
       if (error) throw error;
       setApplications(data || []);
@@ -120,13 +115,146 @@ const JobApplications = ({ userId }: JobApplicationsProps) => {
               </span>
             </div>
             <div className="application-details">
-              <p><strong>Empresa:</strong> {application.job.company}</p>
-              <p><strong>Ubicación:</strong> {application.job.location}</p>
               <p><strong>Fecha:</strong> {new Date(application.created_at).toLocaleDateString()}</p>
             </div>
           </motion.div>
         ))}
       </div>
+      
+      <style jsx>{`
+        .applications-container {
+          max-width: 1200px;
+          margin: 0 auto;
+          padding: 2rem;
+          font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Oxygen, Ubuntu, Cantarell, Fira Sans, Droid Sans, Helvetica Neue, sans-serif;
+        }
+        
+        h2 {
+          font-size: 1.8rem;
+          margin-bottom: 1.5rem;
+          color: #333;
+          font-weight: 600;
+        }
+        
+        .applications-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+          gap: 1.5rem;
+        }
+        
+        .application-card {
+          background: white;
+          border-radius: 12px;
+          padding: 1.5rem;
+          box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+          border: 1px solid #eaeaea;
+          height: 100%;
+          transition: transform 0.2s, box-shadow 0.2s;
+        }
+        
+        .application-card:hover {
+          transform: translateY(-5px) !important;
+          box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+        }
+        
+        .application-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: flex-start;
+          margin-bottom: 1rem;
+        }
+        
+        .application-header h3 {
+          font-size: 1.2rem;
+          margin: 0;
+          color: #333;
+        }
+        
+        .status-badge {
+          display: inline-block;
+          padding: 0.4rem 0.7rem;
+          border-radius: 20px;
+          font-size: 0.8rem;
+          font-weight: 500;
+          color: white;
+        }
+        
+        .application-details {
+          color: #555;
+          font-size: 0.95rem;
+          line-height: 1.5;
+        }
+        
+        .application-details p {
+          margin: 0.5rem 0;
+        }
+        
+        .empty-state {
+          text-align: center;
+          padding: 3rem;
+          background: #f9f9f9;
+          border-radius: 12px;
+          margin-top: 2rem;
+        }
+        
+        .empty-state h3 {
+          font-size: 1.3rem;
+          margin-bottom: 1rem;
+          color: #333;
+        }
+        
+        .empty-state p {
+          color: #666;
+          margin-bottom: 1.5rem;
+        }
+        
+        .primary-button {
+          background: #0070f3;
+          color: white;
+          border: none;
+          padding: 0.75rem 1.5rem;
+          border-radius: 6px;
+          cursor: pointer;
+          font-weight: 500;
+          font-size: 0.9rem;
+          transition: all 0.2s ease;
+        }
+        
+        .primary-button:hover {
+          background: #005cc5;
+        }
+        
+        .loading-container {
+          display: flex;
+          justify-content: center;
+          align-items: center;
+          min-height: 200px;
+        }
+        
+        .loading-spinner {
+          border: 4px solid rgba(0, 0, 0, 0.1);
+          border-radius: 50%;
+          border-top: 4px solid #0070f3;
+          width: 30px;
+          height: 30px;
+          animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
+        }
+        
+        @media (max-width: 768px) {
+          .applications-container {
+            padding: 1rem;
+          }
+          
+          .applications-grid {
+            grid-template-columns: 1fr;
+          }
+        }
+      `}</style>
     </div>
   );
 };

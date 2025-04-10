@@ -61,8 +61,8 @@ const RegisterPage = () => {
   return (
     <>
       <Head>
-        <title>Registro | JobMatch</title>
-        <meta name="description" content="Regístrate en JobMatch" />
+        <title>Registro | Proyecto Marketing</title>
+        <meta name="description" content="Regístrate en Proyecto Marketing" />
       </Head>
       
       <div className="auth-page">

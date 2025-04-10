@@ -6,13 +6,9 @@ import { supabase } from '../utils/supabaseClient';
 type Job = {
   id: string;
   title: string;
-  company: string;
-  location: string;
   description: string;
-  requirements: string;
   salary_range: string;
-  contact_email: string;
-  created_at?: string; 
+  expires_at: string | null;
   is_remote: boolean;
   status: string;
   type: string;
@@ -31,7 +27,8 @@ export default function JobsPage() {
       const { data, error } = await supabase
         .from('jobs')
         .select('*')
-        .order('created_at', { ascending: false });
+        .eq('status', 'active')
+        .order('expires_at', { ascending: true });
       
       if (error) throw error;
       setJobs(data || []);
@@ -96,255 +93,237 @@ export default function JobsPage() {
   return (
     <>
       <Head>
-        <title>Ofertas de Trabajo | Marketing Website</title>
-        <meta name="description" content="Explora las últimas ofertas de trabajo en marketing digital" />
+        <title>Ofertas de Trabajo | Tu Empresa</title>
+        <meta name="description" content="Explora las últimas ofertas de trabajo disponibles" />
       </Head>
-      
+
       <div className="jobs-page">
         <div className="jobs-header">
           <h1>Ofertas de Trabajo</h1>
-          <p>Encuentra las mejores oportunidades en marketing digital</p>
+          <p>Encuentra las mejores oportunidades profesionales</p>
         </div>
-        
-        <div className="container">
-          <div className="jobs-filters">
-            <div className="search-container">
-              <input
-                type="text"
-                placeholder="Buscar por título, empresa o ubicación..."
-                value={searchTerm}
-                onChange={handleSearch}
-                className="search-input"
-              />
-            </div>
-            <div className="type-container">
-              <select
-                value={selectedType}
-                onChange={handleTypeChange}
-                className="type-select"
-              >
-                <option value="">Tipo de trabajo</option>
-                <option value="full-time">Tiempo completo</option>
-                <option value="part-time">Tiempo parcial</option>
-                <option value="remote">Remoto</option>
-              </select>
-            </div>
-          </div>
+
+        <div className="search-container">
+          <input 
+            type="text" 
+            placeholder="Buscar por título o descripción..."
+            value={searchTerm}
+            onChange={handleSearch}
+            className="search-input"
+          />
           
-          {loading ? (
-            <div className="loading-container">
-              <div className="loading-spinner"></div>
-              <p>Cargando ofertas...</p>
-            </div>
-          ) : error ? (
-            <div className="error-message">
-              {error}
-            </div>
-          ) : filteredJobs.length === 0 ? (
-            <div className="no-jobs-message">
-              <h3>No se encontraron ofertas</h3>
-              <p>No hay ofertas que coincidan con tus criterios de búsqueda. Intenta con otros términos.</p>
-            </div>
-          ) : (
-            <div className="jobs-grid">
-              {filteredJobs.map((job) => (
-                <div key={job.id} className="job-card">
-                  <div className="job-title">{job.title}</div>
-                  <div className="job-details">
-                    <div className="job-company">{job.company}</div>
-                    
-                    <div className="job-meta">
-                      <div className="job-location">
-                        📍 {job.location}
-                        {job.is_remote && <span className="remote-badge">Remoto</span>}
-                      </div>
-                      
-                      <div className="job-salary">
-                        💰 {job.salary_range}
-                      </div>
-                    </div>
-                    
-                    <div className="job-description">
-                      {job.description && job.description.length > 150 
-                        ? `${job.description.substring(0, 150)}...` 
-                        : job.description}
-                    </div>
-                    
-                    <div className="job-footer">
-                      {job.created_at && (
-                        <div className="job-date">
-                          Publicado el {formatDate(job.created_at)}
-                        </div>
-                      )}
-                      
-                      <Link href={`/jobs/${job.id}`} className="view-job-button">
-                        Ver detalles
-                      </Link>
-                    </div>
+          <select 
+            value={selectedType} 
+            onChange={handleTypeChange}
+            className="filter-select"
+          >
+            <option value="">Todos los tipos</option>
+            <option value="full-time">Tiempo completo</option>
+            <option value="part-time">Tiempo parcial</option>
+            <option value="contract">Contrato</option>
+            <option value="freelance">Freelance</option>
+          </select>
+        </div>
+
+        {loading ? (
+          <div className="loading-container">
+            <div className="loading-spinner"></div>
+            <p>Cargando ofertas de trabajo...</p>
+          </div>
+        ) : error ? (
+          <div className="error-container">
+            <p>{error}</p>
+            <button onClick={fetchJobs} className="retry-button">Reintentar</button>
+          </div>
+        ) : filteredJobs.length > 0 ? (
+          <div className="jobs-container">
+            {filteredJobs.map((job) => (
+              <Link href={`/jobs/${job.id}`} key={job.id} className="job-card-link">
+                <div className="job-card">
+                  <h2>{job.title}</h2>
+                  <div className="job-tags">
+                    <span className="tag salary-tag">{job.salary_range}</span>
+                    {job.is_remote && <span className="tag remote-tag">Remoto</span>}
+                    {job.type && <span className="tag type-tag">{job.type}</span>}
+                  </div>
+                  <p className="job-description">
+                    {job.description.length > 180 
+                      ? `${job.description.substring(0, 180)}...` 
+                      : job.description}
+                  </p>
+                  <div className="job-footer">
+                    <span className="expiry-date">
+                      {job.expires_at 
+                        ? `Expira el ${new Date(job.expires_at).toLocaleDateString()}` 
+                        : 'Sin fecha de expiración'}
+                    </span>
+                    <span className="view-details">Ver detalles →</span>
                   </div>
                 </div>
-              ))}
-            </div>
-          )}
-        </div>
+              </Link>
+            ))}
+          </div>
+        ) : (
+          <div className="no-results">
+            <h3>No se encontraron ofertas</h3>
+            <p>Intenta con una búsqueda diferente o vuelve más tarde.</p>
+            {searchTerm && 
+              <button onClick={() => setSearchTerm('')} className="clear-search">
+                Limpiar búsqueda
+              </button>
+            }
+          </div>
+        )}
       </div>
-      
+
       <style jsx>{`
         .jobs-page {
-          padding-bottom: 4rem;
+          max-width: 1200px;
+          margin: 0 auto;
+          padding: 2rem;
         }
         
         .jobs-header {
-          background: #0070f3;
-          color: white;
-          padding: 3rem 0;
           text-align: center;
           margin-bottom: 2rem;
         }
         
         .jobs-header h1 {
           font-size: 2.5rem;
-          margin-bottom: 1rem;
+          margin-bottom: 0.5rem;
+          background: linear-gradient(135deg, #0070f3, #00bcd4);
+          -webkit-background-clip: text;
+          -webkit-text-fill-color: transparent;
         }
         
         .jobs-header p {
-          font-size: 1.25rem;
-          max-width: 600px;
-          margin: 0 auto;
-          opacity: 0.9;
-        }
-        
-        .container {
-          max-width: 1200px;
-          margin: 0 auto;
-          padding: 0 2rem;
-        }
-        
-        .jobs-filters {
-          margin-bottom: 2rem;
+          font-size: 1.1rem;
+          color: #666;
         }
         
         .search-container {
-          width: 100%;
+          display: flex;
+          gap: 1rem;
+          margin-bottom: 2rem;
         }
         
         .search-input {
-          width: 100%;
-          padding: 0.75rem 1rem;
-          border: 1px solid #e0e0e0;
-          border-radius: 4px;
+          flex: 1;
+          padding: 0.8rem 1.2rem;
+          border: 2px solid #eaeaea;
+          border-radius: 8px;
           font-size: 1rem;
+          transition: border-color 0.3s;
         }
         
         .search-input:focus {
           border-color: #0070f3;
           outline: none;
-          box-shadow: 0 0 0 2px rgba(0, 112, 243, 0.2);
         }
         
-        .jobs-grid {
+        .filter-select {
+          padding: 0.8rem 1.2rem;
+          border: 2px solid #eaeaea;
+          border-radius: 8px;
+          background-color: white;
+          font-size: 1rem;
+          min-width: 150px;
+        }
+        
+        .jobs-container {
           display: grid;
-          grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+          grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
           gap: 1.5rem;
+        }
+        
+        .job-card-link {
+          text-decoration: none;
+          color: inherit;
+          display: block;
+          height: 100%;
         }
         
         .job-card {
           background: white;
-          border-radius: 8px;
-          box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-          overflow: hidden;
-          transition: transform 0.3s ease;
-          cursor: pointer;
-          position: relative;
-          height: 60px;
+          border-radius: 12px;
+          padding: 1.5rem;
+          box-shadow: 0 4px 6px rgba(0,0,0,0.04);
+          border: 1px solid #eaeaea;
+          transition: transform 0.3s, box-shadow 0.3s;
+          height: 100%;
+          display: flex;
+          flex-direction: column;
         }
         
         .job-card:hover {
           transform: translateY(-5px);
-          height: auto;
+          box-shadow: 0 12px 20px rgba(0,0,0,0.1);
         }
         
-        .job-title {
-          font-size: 1.25rem;
-          font-weight: 600;
-          color: #0070f3;
-          padding: 1.25rem;
-          white-space: nowrap;
-          overflow: hidden;
-          text-overflow: ellipsis;
-        }
-        
-        .job-details {
-          padding: 0 1.25rem 1.25rem;
-          display: none;
-        }
-        
-        .job-card:hover .job-details {
-          display: block;
-        }
-        
-        .job-company {
-          font-weight: 500;
-          color: #333;
+        .job-card h2 {
+          margin-top: 0;
           margin-bottom: 1rem;
+          font-size: 1.3rem;
+          color: #333;
         }
         
-        .job-meta {
+        .job-tags {
           display: flex;
           flex-wrap: wrap;
-          gap: 1rem;
+          gap: 0.5rem;
           margin-bottom: 1rem;
-          color: #666;
         }
         
-        .remote-badge {
-          background: #e6f7ff;
-          color: #0070f3;
-          padding: 0.25rem 0.5rem;
+        .tag {
+          display: inline-block;
+          padding: 0.25rem 0.6rem;
           border-radius: 4px;
-          font-size: 0.75rem;
-          font-weight: 600;
-          margin-left: 0.5rem;
+          font-size: 0.8rem;
+          font-weight: 500;
+        }
+        
+        .salary-tag {
+          background: #ebf5ff;
+          color: #0070f3;
+        }
+        
+        .remote-tag {
+          background: #f3e5f5;
+          color: #9c27b0;
+        }
+        
+        .type-tag {
+          background: #f1f8e9;
+          color: #689f38;
         }
         
         .job-description {
-          margin-bottom: 1.5rem;
           color: #666;
+          line-height: 1.6;
+          margin-bottom: 1.5rem;
+          flex: 1;
         }
         
         .job-footer {
           display: flex;
           justify-content: space-between;
           align-items: center;
-          padding-top: 1rem;
-          border-top: 1px solid #f0f0f0;
+          margin-top: auto;
+          font-size: 0.9rem;
         }
         
-        .job-date {
-          font-size: 0.875rem;
-          color: #666;
+        .expiry-date {
+          color: #fb8c00;
         }
         
-        .view-job-button {
-          background: #e6f7ff;
+        .view-details {
           color: #0070f3;
-          padding: 0.5rem 1rem;
-          border-radius: 4px;
           font-weight: 500;
-          text-decoration: none;
-        }
-        
-        .view-job-button:hover {
-          background: #0070f3;
-          color: white;
         }
         
         .loading-container {
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          justify-content: center;
-          padding: 4rem 0;
+          text-align: center;
+          padding: 3rem;
         }
         
         .loading-spinner {
@@ -354,7 +333,7 @@ export default function JobsPage() {
           width: 40px;
           height: 40px;
           animation: spin 1s linear infinite;
-          margin-bottom: 1rem;
+          margin: 0 auto 1rem;
         }
         
         @keyframes spin {
@@ -362,39 +341,39 @@ export default function JobsPage() {
           100% { transform: rotate(360deg); }
         }
         
-        .error-message {
-          background-color: #ffebee;
+        .error-container {
+          text-align: center;
+          padding: 2rem;
+          background: #ffebee;
+          border-radius: 12px;
           color: #d32f2f;
-          padding: 1rem;
-          border-radius: 4px;
+        }
+        
+        .retry-button {
+          background: #d32f2f;
+          color: white;
+          border: none;
+          padding: 0.5rem 1.5rem;
+          border-radius: 6px;
+          cursor: pointer;
+          margin-top: 1rem;
+        }
+        
+        .no-results {
           text-align: center;
-          margin: 2rem 0;
+          padding: 3rem;
+          background: #f9f9f9;
+          border-radius: 12px;
         }
         
-        .no-jobs-message {
-          text-align: center;
-          padding: 4rem 0;
-          color: #666;
-        }
-        
-        .no-jobs-message h3 {
-          font-size: 1.5rem;
-          margin-bottom: 1rem;
-          color: #333;
-        }
-        
-        @media (max-width: 768px) {
-          .jobs-header {
-            padding: 2rem 0;
-          }
-          
-          .jobs-header h1 {
-            font-size: 2rem;
-          }
-          
-          .jobs-grid {
-            grid-template-columns: 1fr;
-          }
+        .clear-search {
+          background: #0070f3;
+          color: white;
+          border: none;
+          padding: 0.6rem 1.2rem;
+          border-radius: 6px;
+          cursor: pointer;
+          margin-top: 1rem;
         }
       `}</style>
     </>

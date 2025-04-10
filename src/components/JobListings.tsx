@@ -5,11 +5,10 @@ import { supabase } from '../utils/supabaseClient';
 interface Job {
   id: string;
   title: string;
-  company: string;
-  location: string;
   description: string;
-  salary: string;
-  created_at: string;
+  salary_range: string;
+  expires_at: string | null;
+  status: 'active' | 'proceso de seleccion';
 }
 
 const JobListings = () => {
@@ -22,7 +21,8 @@ const JobListings = () => {
         const { data, error } = await supabase
           .from('jobs')
           .select('*')
-          .order('created_at', { ascending: false });
+          .eq('status', 'active')
+          .order('expires_at', { ascending: true });
 
         if (error) {
           console.error('Error fetching jobs:', error);
@@ -96,15 +96,7 @@ const JobListings = () => {
             }}>
               {job.title}
             </h3>
-            <p style={{ fontWeight: '600', marginBottom: '0.5rem' }}>{job.company}</p>
-            <p style={{ color: 'var(--text-color)', opacity: 0.8, marginBottom: '1rem' }}>
-              {job.location}
-            </p>
-            <p style={{ marginBottom: '1rem' }}>
-              {job.description.length > 150 
-                ? `${job.description.substring(0, 150)}...` 
-                : job.description}
-            </p>
+            <p style={{ fontWeight: '600', marginBottom: '0.5rem' }}>{job.description}</p>
             <div style={{ 
               display: 'flex', 
               justifyContent: 'space-between', 
@@ -117,10 +109,10 @@ const JobListings = () => {
                 WebkitBackgroundClip: 'text',
                 WebkitTextFillColor: 'transparent'
               }}>
-                {job.salary}
+                {job.salary_range}
               </span>
               <span style={{ fontSize: '0.875rem', opacity: 0.7 }}>
-                {new Date(job.created_at).toLocaleDateString()}
+                {job.expires_at ? new Date(job.expires_at).toLocaleDateString() : 'Sin fecha de expiración'}
               </span>
             </div>
           </motion.div>

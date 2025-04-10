@@ -13,7 +13,7 @@ type Job = {
   requirements: string;
   salary_range: string;
   contact_email: string;
-  created_at: string;
+  expires_at: string | null;
   is_remote: boolean;
   status: string;
 };
@@ -172,8 +172,8 @@ const JobDetailPage = () => {
                 </div>
                 
                 <div className="meta-item">
-                  <span className="meta-label">Publicado:</span> 
-                  {formatDate(job.created_at)}
+                  <span className="meta-label">Fecha límite:</span> 
+                  {job.expires_at ? formatDate(job.expires_at) : 'Sin fecha límite'}
                 </div>
               </div>
             </div>

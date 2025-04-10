@@ -51,8 +51,8 @@ const LoginPage = () => {
   return (
     <>
       <Head>
-        <title>Iniciar Sesión | JobMatch</title>
-        <meta name="description" content="Inicia sesión en JobMatch" />
+        <title>Iniciar Sesión | Proyecto Marketing</title>
+        <meta name="description" content="Inicia sesión en Proyecto Marketing" />
       </Head>
       
       <div className="auth-page">

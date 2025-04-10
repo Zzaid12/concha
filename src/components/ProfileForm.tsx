@@ -1,422 +1,400 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { supabase } from '../utils/supabaseClient';
+import Image from 'next/image';
 import { motion } from 'framer-motion';
 
-// Campos requeridos para completar el perfil (ajustar según sea necesario)
+// Definimos los campos requeridos para completar el perfil
 export const REQUIRED_FIELDS = [
   'first_name',
   'last_name',
   'email',
-  'phone',
+  'role',
   'country',
-  'city',
-  'languages',
-  'portfolio_url'
+  'city'
 ];
 
-// Interfaz para el perfil
+// Definimos la interfaz para el perfil
 export interface Profile {
-  user_id: string; // Clave foránea a auth.users.id
+  id?: string;
+  user_id: string;
+  first_name: string;
+  last_name: string;
   email: string;
-  role?: string;
-  created_at?: string; // timestamp
-  first_name?: string;
-  last_name?: string;
-  phone?: string;
-  age?: number;
-  gender?: string;
+  role: 'candidate' | 'admin' | 'recruiter' | 'cliente'; // Valores permitidos para role
+  bio?: string;
   country?: string;
   city?: string;
-  languages?: string[]; // _text (array of text)
-  instagram_profile?: string;
-  tiktok_profile?: string;
+  languages?: string[];
+  skills?: string[];
+  avatar_url?: string;
   portfolio_url?: string;
+  linkedin_url?: string;
+  github_url?: string;
+  twitter_url?: string;
+  instagram_url?: string;
+  website_url?: string;
+  phone?: string;
+  address?: string;
+  company?: string;
+  position?: string;
+  created_at?: string;
 }
 
 interface ProfileFormProps {
-  profile: Profile | null;
-  onSuccess: () => void;
+  profile?: Profile | null;
+  onSuccess?: () => void;
 }
 
-export default function ProfileForm({ profile, onSuccess }: ProfileFormProps) {
-  const [profileData, setProfileData] = useState<Profile>({
-    user_id: '',
-    email: '',
-    first_name: '',
-    last_name: '',
-    phone: '',
-    country: '',
-    city: '',
-    languages: [],
-    portfolio_url: '',
-    instagram_profile: '',
-    tiktok_profile: '',
-  });
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState('');
-  const [missingFields, setMissingFields] = useState<string[]>([]);
-  const [profileNotFound, setProfileNotFound] = useState(false);
-
-  useEffect(() => {
-    if (profile) {
-      setProfileData({
-        user_id: profile.user_id,
-        email: profile.email,
-        role: profile.role || '',
-        created_at: profile.created_at,
-        first_name: profile.first_name || '',
-        last_name: profile.last_name || '',
-        phone: profile.phone || '',
-        age: profile.age,
-        gender: profile.gender || '',
-        country: profile.country || '',
-        city: profile.city || '',
-        languages: profile.languages || [],
-        instagram_profile: profile.instagram_profile || '',
-        tiktok_profile: profile.tiktok_profile || '',
-        portfolio_url: profile.portfolio_url || '',
-      });
-      checkProfileCompletion(profile);
-    }
-    setLoading(false);
-  }, [profile]);
-
-  const checkProfileCompletion = (currentProfileData: Profile) => {
-    const missing = REQUIRED_FIELDS.filter(field => {
-      const value = currentProfileData[field as keyof Profile];
-      if (Array.isArray(value)) {
-        return value.length === 0;
-      } 
-      return !value;
-    });
-    setMissingFields(missing);
+// Componente para mostrar un banner de campos faltantes
+const CompletionBanner = ({ missingFields, scrollToField }: { missingFields: string[], scrollToField: (fieldId: string) => void }) => {
+  if (missingFields.length === 0) return null;
+  
+  const fieldNames: Record<string, string> = {
+    first_name: 'Nombre',
+    last_name: 'Apellido',
+    email: 'Email',
+    role: 'Rol',
+    country: 'País'
   };
+  
+  return (
+    <motion.div 
+      initial={{ opacity: 0, y: -20 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="bg-gradient-to-r from-orange-600 to-red-600 p-4 rounded-lg mb-6 text-white shadow-lg"
+    >
+      <h3 className="text-lg font-semibold mb-2">Por favor complete su perfil</h3>
+      <p className="mb-3">Faltan completar los siguientes campos:</p>
+      <ul className="list-disc pl-5 mb-4">
+        {missingFields.map(field => (
+          <li key={field} className="mb-1">
+            <button 
+              onClick={() => scrollToField(field)}
+              className="underline hover:text-white/80 focus:outline-none"
+            >
+              {fieldNames[field] || field}
+            </button>
+          </li>
+        ))}
+      </ul>
+      <motion.button
+        whileHover={{ scale: 1.05 }}
+        whileTap={{ scale: 0.95 }}
+        onClick={() => scrollToField(missingFields[0])}
+        className="bg-white text-red-600 px-4 py-2 rounded-md font-medium shadow-md hover:bg-white/90"
+      >
+        Completar perfil
+      </motion.button>
+    </motion.div>
+  );
+};
+
+export default function ProfileForm({ profile: initialProfile, onSuccess }: ProfileFormProps) {
+  const [profile, setProfile] = useState<Profile | null>(initialProfile || null);
+  const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [missingFields, setMissingFields] = useState<string[]>([]);
+  
+  // Referencias para scrolling a campos específicos
+  const fieldRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  
+  // Función para scrollear a un campo específico
+  const scrollToField = (fieldId: string) => {
+    if (fieldRefs.current[fieldId]) {
+      fieldRefs.current[fieldId]?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      // Resaltar visualmente el campo
+      const input = fieldRefs.current[fieldId]?.querySelector('input, select, textarea');
+      if (input) {
+        input.classList.add('ring-2', 'ring-warning', 'ring-offset-2', 'ring-offset-background');
+        setTimeout(() => {
+          input.classList.remove('ring-2', 'ring-warning', 'ring-offset-2', 'ring-offset-background');
+        }, 2000);
+      }
+    }
+  };
+  
+  // Función para verificar si el perfil está completo
+  const checkProfileCompletion = (profileData: Profile | null) => {
+    if (!profileData) {
+      setMissingFields(REQUIRED_FIELDS);
+      return false;
+    }
+    
+    const missing = REQUIRED_FIELDS.filter(field => !profileData[field as keyof Profile]);
+    setMissingFields(missing);
+    return missing.length === 0;
+  };
+  
+  useEffect(() => {
+    if (initialProfile) {
+      setProfile(initialProfile);
+      checkProfileCompletion(initialProfile);
+    }
+  }, [initialProfile]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setSaving(true);
-    setMessage('');
-
-    checkProfileCompletion(profileData);
-
+    
+    if (!profile) return;
+    
     try {
-      const dataToSave = {
-        ...profileData,
-        updated_at: new Date().toISOString()
+      setLoading(true);
+      
+      // Get current user
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      if (!user) {
+        throw new Error('No user found');
+      }
+      
+      // Prepare data to save
+      const updates = {
+        ...profile,
+        user_id: user.id
       };
-
+      
+      // Save to profiles table
       const { error } = await supabase
         .from('profiles')
-        .upsert(dataToSave, { onConflict: 'user_id' });
-
+        .upsert(updates, { onConflict: 'user_id' });
+      
       if (error) throw error;
-
-      setMessage('Perfil guardado exitosamente');
+      
+      setMessage({ text: 'Perfil guardado correctamente', type: 'success' });
+      
+      // Check if profile is complete
+      checkProfileCompletion(updates);
+      
+      // Call onSuccess callback if provided
       if (onSuccess) {
         onSuccess();
       }
     } catch (error) {
-      console.error('Error guardando perfil:', error);
-      setMessage('Error al guardar el perfil');
+      console.error('Error updating profile:', error);
+      setMessage({ text: 'Error al guardar el perfil', type: 'error' });
     } finally {
-      setSaving(false);
+      setLoading(false);
+      
+      // Clear message after 3 seconds
+      setTimeout(() => {
+        setMessage(null);
+      }, 3000);
     }
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
-    const processedValue = name === 'age' ? (value === '' ? undefined : parseInt(value, 10)) : value;
-    
-    setProfileData(prev => {
-      const updatedData = { ...prev, [name]: processedValue };
-      checkProfileCompletion(updatedData);
-      return updatedData;
+    setProfile(prev => {
+      if (!prev) return null;
+      return { ...prev, [name]: value };
     });
   };
 
-  const handleLanguageAdd = (language: string) => {
-    if (language && !(profileData.languages || []).includes(language)) {
-      const updatedLanguages = [...(profileData.languages || []), language];
-      setProfileData(prev => {
-        const updatedData = { ...prev, languages: updatedLanguages };
-        checkProfileCompletion(updatedData);
-        return updatedData;
+  const handleArrayChange = (name: string, value: string[]) => {
+    setProfile(prev => {
+      if (!prev) return null;
+      return { ...prev, [name]: value };
+    });
+  };
+
+  const handleLanguageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const languages = e.target.value.split(',').map(lang => lang.trim());
+    handleArrayChange('languages', languages);
+  };
+
+  const handleSkillsChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const skills = e.target.value.split(',').map(skill => skill.trim());
+    handleArrayChange('skills', skills);
+  };
+
+  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    try {
+      setUploading(true);
+      
+      if (!e.target.files || e.target.files.length === 0) {
+        throw new Error('Debe seleccionar una imagen.');
+      }
+
+      const file = e.target.files[0];
+      const fileExt = file.name.split('.').pop();
+      const filePath = `avatars/${Date.now()}.${fileExt}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('avatars')
+        .upload(filePath, file);
+
+      if (uploadError) {
+        throw uploadError;
+      }
+
+      // Get public URL
+      const { data } = supabase.storage.from('avatars').getPublicUrl(filePath);
+      
+      // Update profile
+      setProfile(prev => {
+        if (!prev) return null;
+        return { ...prev, avatar_url: data.publicUrl };
       });
+      
+      setMessage({ text: 'Avatar subido correctamente', type: 'success' });
+    } catch (error) {
+      console.error('Error uploading avatar:', error);
+      setMessage({ text: 'Error al subir el avatar', type: 'error' });
+    } finally {
+      setUploading(false);
     }
   };
 
-  const handleLanguageRemove = (languageToRemove: string) => {
-    const updatedLanguages = (profileData.languages || []).filter(lang => lang !== languageToRemove);
-    setProfileData(prev => {
-      const updatedData = { ...prev, languages: updatedLanguages };
-      checkProfileCompletion(updatedData);
-      return updatedData;
-    });
-  };
-
-  if (loading) {
-    return <div className="loading">Cargando perfil...</div>;
-  }
-
-  if (profileNotFound) {
+  // Si no hay perfil, mostrar mensaje
+  if (!profile) {
     return (
-      <motion.div 
-        className="profile-not-found"
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5 }}
-      >
-        <h2>Perfil no encontrado</h2>
-        <p>No se encontró un perfil asociado a tu cuenta. Por favor, completa la información a continuación para crear tu perfil.</p>
-        <motion.button
-          className="create-profile-button"
-          onClick={() => setProfileNotFound(false)}
-          whileHover={{ scale: 1.05 }}
-          whileTap={{ scale: 0.95 }}
-        >
-          Crear Perfil
-        </motion.button>
-      </motion.div>
+      <div className="text-center p-6 bg-background-light rounded-lg shadow-md">
+        <h2 className="text-xl font-semibold mb-4">Perfil no encontrado</h2>
+        <p className="text-text-secondary mb-2">No se ha encontrado un perfil asociado a tu cuenta.</p>
+        <p className="text-text-secondary">Por favor, contacta al administrador si crees que esto es un error.</p>
+      </div>
     );
   }
 
   return (
-    <div className="profile-form-container">
-      {missingFields.length > 0 && (
-        <motion.div 
-          className="profile-completion-banner"
-          initial={{ opacity: 0, y: -20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5 }}
-        >
-          <div className="completion-info">
-            <h3>¡Completa tu perfil!</h3>
-            <p>Para mejorar tus oportunidades, completa los siguientes campos:</p>
-            <ul className="missing-fields-list">
-              {missingFields.map(field => (
-                <motion.li
-                  key={field}
-                  initial={{ scale: 0.8 }}
-                  animate={{ scale: 1 }}
-                  whileHover={{ scale: 1.05 }}
-                >
-                  {field.replace('_', ' ')}
-                </motion.li>
-              ))}
-            </ul>
-            <motion.button
-              className="complete-profile-button"
-              onClick={() => {
-                const firstMissingField = document.getElementById(missingFields[0]);
-                if (firstMissingField) {
-                  firstMissingField.scrollIntoView({ behavior: 'smooth' });
-                  firstMissingField.focus();
-                }
-              }}
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-            >
-              Completar Perfil
-            </motion.button>
-          </div>
-        </motion.div>
+    <div className="max-w-4xl mx-auto">
+      {/* Banner de campos faltantes */}
+      <CompletionBanner missingFields={missingFields} scrollToField={scrollToField} />
+      
+      {/* Mensajes de estado */}
+      {message && (
+        <div className={`p-4 rounded-md mb-6 ${
+          message.type === 'success' ? 'bg-success/20 text-success' : 'bg-error/20 text-error'
+        }`}>
+          {message.text}
+        </div>
       )}
-
-      <form onSubmit={handleSubmit} className="profile-form space-y-6">
-        <div className="form-section">
-          <h3>Información Personal</h3>
-          <div className="form-grid">
-            <div className="form-group">
-              <label htmlFor="first_name">Nombre {REQUIRED_FIELDS.includes('first_name') ? '*' : ''}</label>
+      
+      <form onSubmit={handleSubmit} className="space-y-6">
+        <div className="bg-background-light p-5 rounded-lg shadow-md">
+          <h2 className="text-xl font-semibold mb-4 border-b border-gray-700 pb-2">Información Personal</h2>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Nombre */}
+            <div className="col-span-1">
+              <label htmlFor="first_name" className="block text-sm font-medium mb-1">
+                Nombre <span className="text-error">*</span>
+              </label>
               <input
                 type="text"
                 id="first_name"
                 name="first_name"
-                value={profileData.first_name || ''} 
+                value={profile.first_name || ''}
                 onChange={handleChange}
-                className={missingFields.includes('first_name') ? 'missing-field' : ''}
-                required={REQUIRED_FIELDS.includes('first_name')}
+                className="w-full"
+                placeholder="Ingresa tu nombre"
+                required
               />
             </div>
-            <div className="form-group">
-              <label htmlFor="last_name">Apellido {REQUIRED_FIELDS.includes('last_name') ? '*' : ''}</label>
+            
+            {/* Apellido */}
+            <div className="col-span-1">
+              <label htmlFor="last_name" className="block text-sm font-medium mb-1">
+                Apellido <span className="text-error">*</span>
+              </label>
               <input
                 type="text"
                 id="last_name"
                 name="last_name"
-                value={profileData.last_name || ''}
+                value={profile.last_name || ''}
                 onChange={handleChange}
-                className={missingFields.includes('last_name') ? 'missing-field' : ''}
-                required={REQUIRED_FIELDS.includes('last_name')}
+                className="w-full"
+                placeholder="Ingresa tu apellido"
+                required
               />
             </div>
-            <div className="form-group">
-              <label htmlFor="email">Email {REQUIRED_FIELDS.includes('email') ? '*' : ''}</label>
+            
+            {/* Email */}
+            <div className="col-span-1">
+              <label htmlFor="email" className="block text-sm font-medium mb-1">
+                Email <span className="text-error">*</span>
+              </label>
               <input
                 type="email"
                 id="email"
                 name="email"
-                value={profileData.email || ''} 
+                value={profile.email || ''}
                 onChange={handleChange}
-                className={missingFields.includes('email') ? 'missing-field' : ''}
-                required={REQUIRED_FIELDS.includes('email')}
+                className="w-full"
+                placeholder="tu@email.com"
+                required
               />
             </div>
-            <div className="form-group">
-              <label htmlFor="phone">Teléfono {REQUIRED_FIELDS.includes('phone') ? '*' : ''}</label>
-              <input
-                type="tel"
-                id="phone"
-                name="phone"
-                value={profileData.phone || ''} 
+            
+            {/* Rol */}
+            <div className="col-span-1">
+              <label htmlFor="role" className="block text-sm font-medium mb-1">
+                Rol <span className="text-error">*</span>
+              </label>
+              <select
+                id="role"
+                name="role"
+                value={profile.role || ''}
                 onChange={handleChange}
-                className={missingFields.includes('phone') ? 'missing-field' : ''}
-                required={REQUIRED_FIELDS.includes('phone')}
-              />
+                className="w-full"
+                required
+              >
+                <option value="">Selecciona un rol</option>
+                <option value="candidate">Candidato</option>
+                <option value="recruiter">Reclutador</option>
+                <option value="cliente">Cliente</option>
+              </select>
             </div>
-            <div className="form-group">
-              <label htmlFor="age">Edad {REQUIRED_FIELDS.includes('age') ? '*' : ''}</label>
-              <input
-                type="number"
-                id="age"
-                name="age"
-                value={profileData.age || ''} 
-                onChange={handleChange}
-                className={missingFields.includes('age') ? 'missing-field' : ''}
-                required={REQUIRED_FIELDS.includes('age')}
-              />
-            </div>
-            <div className="form-group">
-              <label htmlFor="gender">Género {REQUIRED_FIELDS.includes('gender') ? '*' : ''}</label>
-              <input
-                type="text"
-                id="gender"
-                name="gender"
-                value={profileData.gender || ''} 
-                onChange={handleChange}
-                className={missingFields.includes('gender') ? 'missing-field' : ''}
-                required={REQUIRED_FIELDS.includes('gender')}
-              />
-            </div>
-            <div className="form-group">
-              <label htmlFor="country">País {REQUIRED_FIELDS.includes('country') ? '*' : ''}</label>
+            
+            {/* País */}
+            <div className="col-span-1">
+              <label htmlFor="country" className="block text-sm font-medium mb-1">
+                País <span className="text-error">*</span>
+              </label>
               <input
                 type="text"
                 id="country"
                 name="country"
-                value={profileData.country || ''} 
+                value={profile.country || ''}
                 onChange={handleChange}
-                className={missingFields.includes('country') ? 'missing-field' : ''}
-                required={REQUIRED_FIELDS.includes('country')}
+                className="w-full"
+                placeholder="España"
+                required
               />
             </div>
-            <div className="form-group">
-              <label htmlFor="city">Ciudad {REQUIRED_FIELDS.includes('city') ? '*' : ''}</label>
+            
+            {/* Ciudad */}
+            <div className="col-span-1">
+              <label htmlFor="city" className="block text-sm font-medium mb-1">
+                Ciudad <span className="text-error">*</span>
+              </label>
               <input
                 type="text"
                 id="city"
                 name="city"
-                value={profileData.city || ''} 
+                value={profile.city || ''}
                 onChange={handleChange}
-                className={missingFields.includes('city') ? 'missing-field' : ''}
-                required={REQUIRED_FIELDS.includes('city')}
+                className="w-full"
+                placeholder="Madrid"
+                required
               />
             </div>
           </div>
         </div>
-
-        <div className="form-section">
-          <h3>Idiomas {REQUIRED_FIELDS.includes('languages') ? '*' : ''}</h3>
-          <div className="form-group">
-            <div className="language-input">
-              <input
-                type="text"
-                placeholder="Agregar idioma y presionar Enter"
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && e.currentTarget.value) {
-                    e.preventDefault();
-                    handleLanguageAdd((e.target as HTMLInputElement).value);
-                    (e.target as HTMLInputElement).value = '';
-                  }
-                }}
-              />
-            </div>
-            <div className={`languages-list ${missingFields.includes('languages') ? 'missing-field-container' : ''}`}>
-              {(profileData.languages || []).map(language => (
-                <div key={language} className="language-tag">
-                  <span>{language}</span>
-                  <button
-                    type="button"
-                    className="remove-language"
-                    onClick={() => handleLanguageRemove(language)}
-                  >
-                    ×
-                  </button>
-                </div>
-              ))}
-            </div>
-             {missingFields.includes('languages') && <span className="missing-field-text">Se requiere al menos un idioma</span>}
-          </div>
+        
+        {/* Botón de guardar */}
+        <div className="flex justify-end">
+          <motion.button
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            type="submit"
+            className="bg-primary hover:bg-primary-dark text-white py-2 px-6 rounded-md font-medium"
+            disabled={loading}
+          >
+            {loading ? 'Guardando...' : 'Guardar Perfil'}
+          </motion.button>
         </div>
-
-        <div className="form-section">
-          <h3>Enlaces</h3>
-          <div className="form-grid">
-            <div className="form-group">
-              <label htmlFor="portfolio_url">URL del Portfolio {REQUIRED_FIELDS.includes('portfolio_url') ? '*' : ''}</label>
-              <input
-                type="url"
-                id="portfolio_url"
-                name="portfolio_url"
-                value={profileData.portfolio_url || ''} 
-                onChange={handleChange}
-                className={missingFields.includes('portfolio_url') ? 'missing-field' : ''}
-                required={REQUIRED_FIELDS.includes('portfolio_url')}
-              />
-            </div>
-            <div className="form-group">
-              <label htmlFor="instagram_profile">Perfil Instagram {REQUIRED_FIELDS.includes('instagram_profile') ? '*' : ''}</label>
-              <input
-                type="text"
-                id="instagram_profile"
-                name="instagram_profile"
-                value={profileData.instagram_profile || ''} 
-                onChange={handleChange}
-                className={missingFields.includes('instagram_profile') ? 'missing-field' : ''}
-                required={REQUIRED_FIELDS.includes('instagram_profile')}
-              />
-            </div>
-            <div className="form-group">
-              <label htmlFor="tiktok_profile">Perfil TikTok {REQUIRED_FIELDS.includes('tiktok_profile') ? '*' : ''}</label>
-              <input
-                type="text"
-                id="tiktok_profile"
-                name="tiktok_profile"
-                value={profileData.tiktok_profile || ''} 
-                onChange={handleChange}
-                className={missingFields.includes('tiktok_profile') ? 'missing-field' : ''}
-                required={REQUIRED_FIELDS.includes('tiktok_profile')}
-              />
-            </div>
-          </div>
-        </div>
-
-        {message && (
-          <div className={`message ${message.includes('Error') ? 'error' : 'success'}`}>
-            {message}
-          </div>
-        )}
-
-        <motion.button
-          type="submit"
-          className="save-profile-button"
-          disabled={saving}
-          whileHover={{ scale: 1.02 }}
-          whileTap={{ scale: 0.98 }}
-        >
-          {saving ? 'Guardando...' : 'Guardar Perfil'}
-        </motion.button>
       </form>
     </div>
   );
