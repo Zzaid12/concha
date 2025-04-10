@@ -11,10 +11,11 @@ interface Job {
   status: 'active' | 'proceso de seleccion';
 }
 
-interface User {
-  id: string;
-  // Add any other necessary properties
-}
+// Eliminar interfaz User si no se usa
+// interface User {
+//   id: string;
+//   // Add any other necessary properties
+// }
 
 export default function AdminPage() {
   const router = useRouter();

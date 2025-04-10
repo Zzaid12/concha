@@ -88,7 +88,7 @@ export default function JobsPage() {
         month: 'long',
         year: 'numeric',
       });
-    } catch (e) {
+    } catch (_e) {
       return "Fecha no disponible";
     }
   };
