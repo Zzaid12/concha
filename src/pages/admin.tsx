@@ -18,7 +18,6 @@ interface User {
 
 export default function AdminPage() {
   const router = useRouter();
-  const [user, setUser] = useState<User | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [jobs, setJobs] = useState<Job[]>([]);
   const [loading, setLoading] = useState(true);
@@ -31,13 +30,11 @@ export default function AdminPage() {
   const [salaryRange, setSalaryRange] = useState('');
   const [expiresAt, setExpiresAt] = useState('');
   const [status, setStatus] = useState<'active' | 'proceso de seleccion'>('active');
-  const [message, setMessage] = useState('');
 
   const checkAdmin = async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
-        setUser(user);
         const { data: profile } = await supabase
           .from('profiles')
           .select('role')
@@ -84,7 +81,6 @@ export default function AdminPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setMessage('');
 
     if (!title || !description || !salaryRange || !expiresAt) {
       alert('Por favor completa todos los campos requeridos');

@@ -11,7 +11,6 @@ const RegisterPage = () => {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
-  const [messageType, setMessageType] = useState<'error' | 'success'>('error');
   const [name, setName] = useState('');
 
   const handleRegister = async (e: React.FormEvent) => {
@@ -52,7 +51,8 @@ const RegisterPage = () => {
       setMessage('¡Registro exitoso! Por favor, verifica tu correo electrónico.');
       router.push('/login');
     } catch (err) {
-      setMessage('Error al registrarse. Por favor, intenta nuevamente.');
+      console.error("Registration error:", err);
+      setMessage('Error al registrar. Por favor, intenta de nuevo.');
     } finally {
       setLoading(false);
     }
@@ -76,7 +76,7 @@ const RegisterPage = () => {
           <h1 className="auth-title">Crear Cuenta</h1>
           
           {message && (
-            <div className={`message ${messageType}`}>
+            <div className={`message error`}>
               {message}
             </div>
           )}

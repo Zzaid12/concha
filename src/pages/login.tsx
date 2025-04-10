@@ -11,7 +11,6 @@ const LoginPage = () => {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
-  const [messageType, setMessageType] = useState<'error' | 'success'>('error');
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -42,6 +41,7 @@ const LoginPage = () => {
         }
       }
     } catch (err) {
+      console.error("Login error:", err);
       setMessage('Error al iniciar sesión. Por favor, verifica tus credenciales.');
     } finally {
       setLoading(false);
@@ -66,7 +66,7 @@ const LoginPage = () => {
           <h1 className="auth-title">Iniciar Sesión</h1>
           
           {message && (
-            <div className={`message ${messageType}`}>
+            <div className={`message error`}>
               {message}
             </div>
           )}
