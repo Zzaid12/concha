@@ -15,49 +15,34 @@ const LoginPage = () => {
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+    setLoading(true);
+    setMessage('');
+
     try {
-      setLoading(true);
-      setMessage('');
-      
-      const { data, error } = await supabase.auth.signInWithPassword({
+      const { error } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
-      
-      if (error) {
-        setMessageType('error');
-        setMessage(error.message);
-        return;
-      }
-      
-      if (!data.user) {
-        throw new Error('No se pudo iniciar sesión');
-      }
-      
+
+      if (error) throw error;
+
       // Verificar si el perfil está completo
-      const { data: profileData, error: profileError } = await supabase
-        .from('profiles')
-        .select('is_complete')
-        .eq('id', data.user.id)
-        .single();
-        
-      if (profileError) {
-        console.error('Error al verificar el perfil:', profileError);
-        // Si hay error al verificar el perfil, redirigir a la página principal
-        router.push('/');
-        return;
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('is_complete')
+          .eq('id', user.id)
+          .single();
+
+        if (profile?.is_complete) {
+          router.push('/jobs');
+        } else {
+          router.push('/profile');
+        }
       }
-      
-      // Redirigir según el estado del perfil
-      if (profileData && !profileData.is_complete) {
-        router.push('/profile');
-      } else {
-        router.push('/');
-      }
-    } catch (error: any) {
-      setMessageType('error');
-      setMessage(error.message || 'Error al iniciar sesión');
+    } catch (err) {
+      setMessage('Error al iniciar sesión. Por favor, verifica tus credenciales.');
     } finally {
       setLoading(false);
     }

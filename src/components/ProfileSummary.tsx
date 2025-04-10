@@ -1,147 +1,173 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { supabase } from '../utils/supabaseClient';
-import { Profile } from './ProfileForm';
+import { Profile, REQUIRED_FIELDS } from './ProfileForm';
 
 interface ProfileSummaryProps {
-  userId: string;
+  profile: Profile | null;
   onEdit: () => void;
 }
 
-const ProfileSummary = ({ userId, onEdit }: ProfileSummaryProps) => {
-  const [profile, setProfile] = useState<Profile | null>(null);
-  const [loading, setLoading] = useState(true);
+export default function ProfileSummary({ profile, onEdit }: ProfileSummaryProps) {
+  const [isComplete, setIsComplete] = useState(false);
 
   useEffect(() => {
-    fetchProfile();
-  }, [userId]);
-
-  const fetchProfile = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', userId)
-        .single();
-
-      if (error) throw error;
-      setProfile(data);
-    } catch (error) {
-      console.error('Error fetching profile:', error);
-    } finally {
-      setLoading(false);
+    if (!profile) {
+      setIsComplete(false);
+      return;
     }
-  };
-
-  if (loading) {
-    return (
-      <div className="loading-container">
-        <div className="loading-spinner" />
-      </div>
-    );
-  }
+    
+    const missing = REQUIRED_FIELDS.filter(field => {
+      const value = profile[field as keyof Profile];
+      if (Array.isArray(value)) {
+        return value.length === 0;
+      } 
+      return !value;
+    });
+    
+    setIsComplete(missing.length === 0);
+    
+  }, [profile]);
 
   if (!profile) {
-    return (
-      <div className="empty-state">
-        <h3>Perfil no encontrado</h3>
-        <p>No se pudo cargar la información del perfil.</p>
-      </div>
-    );
+    return <div>No hay datos del perfil disponibles</div>;
   }
 
+  const fullName = [profile.first_name, profile.last_name].filter(Boolean).join(' ');
+  const location = [profile.city, profile.country].filter(Boolean).join(', ');
+
   return (
-    <div className="profile-summary">
+    <motion.div 
+      className="profile-summary"
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.5 }}
+    >
       <div className="profile-header">
-        <h2>Mi Perfil</h2>
-        <motion.button
-          className="edit-button"
-          whileHover={{ scale: 1.02 }}
-          whileTap={{ scale: 0.98 }}
-          onClick={onEdit}
-        >
+        <h2>Resumen del Perfil {isComplete ? '(Completo)' : '(Incompleto)'}</h2>
+        <button onClick={onEdit} className="edit-button">
           Editar Perfil
-        </motion.button>
+        </button>
       </div>
 
-      <div className="profile-info">
-        <div className="info-section">
+      <div className="profile-content">
+        <div className="profile-section">
           <h3>Información Personal</h3>
-          <div className="info-grid">
-            <div className="info-item">
-              <span className="label">Nombre Completo</span>
-              <span className="value">{profile.full_name || 'No especificado'}</span>
-            </div>
-            <div className="info-item">
-              <span className="label">Email</span>
-              <span className="value">{profile.email}</span>
-            </div>
-            <div className="info-item">
-              <span className="label">Teléfono</span>
-              <span className="value">{profile.phone || 'No especificado'}</span>
-            </div>
+          <p><strong>Nombre:</strong> {fullName || 'No especificado'}</p>
+          <p><strong>Email:</strong> {profile.email || 'No especificado'}</p>
+          <p><strong>Teléfono:</strong> {profile.phone || 'No especificado'}</p>
+          <p><strong>Ubicación:</strong> {location || 'No especificado'}</p>
+          {profile.age !== undefined && profile.age !== null && <p><strong>Edad:</strong> {profile.age}</p>}
+          {profile.gender && <p><strong>Género:</strong> {profile.gender}</p>}
+        </div>
+
+        <div className="profile-section">
+          <h3>Idiomas</h3>
+          <div className="languages-list">
+            {(profile.languages && profile.languages.length > 0) ? (
+              profile.languages.map((language: string, index: number) => ( 
+                <span key={index} className="language-tag">{language}</span>
+              ))
+            ) : (
+              <p>No especificado</p>
+            )}
           </div>
         </div>
 
-        <div className="info-section">
-          <h3>Información Profesional</h3>
-          <div className="info-grid">
-            <div className="info-item">
-              <span className="label">Empresa</span>
-              <span className="value">{profile.company || 'No especificado'}</span>
-            </div>
-            <div className="info-item">
-              <span className="label">Cargo</span>
-              <span className="value">{profile.position || 'No especificado'}</span>
-            </div>
-            <div className="info-item">
-              <span className="label">Industria</span>
-              <span className="value">{profile.industry || 'No especificado'}</span>
-            </div>
-            <div className="info-item">
-              <span className="label">Ubicación</span>
-              <span className="value">{profile.location || 'No especificado'}</span>
-            </div>
-          </div>
-        </div>
-
-        <div className="info-section">
+        <div className="profile-section">
           <h3>Enlaces</h3>
-          <div className="info-grid">
-            <div className="info-item">
-              <span className="label">LinkedIn</span>
-              <span className="value">
-                {profile.linkedin ? (
-                  <a href={profile.linkedin} target="_blank" rel="noopener noreferrer">
-                    Ver Perfil
-                  </a>
-                ) : (
-                  'No especificado'
-                )}
-              </span>
-            </div>
-            <div className="info-item">
-              <span className="label">Sitio Web</span>
-              <span className="value">
-                {profile.website ? (
-                  <a href={profile.website} target="_blank" rel="noopener noreferrer">
-                    Visitar Sitio
-                  </a>
-                ) : (
-                  'No especificado'
-                )}
-              </span>
-            </div>
+          <div className="social-links">
+            {profile.portfolio_url && (
+              <a href={profile.portfolio_url} target="_blank" rel="noopener noreferrer">
+                Portfolio
+              </a>
+            )}
+            {profile.instagram_profile && (
+              <a href={`https://instagram.com/${profile.instagram_profile}`} target="_blank" rel="noopener noreferrer">
+                Instagram
+              </a>
+            )}
+            {profile.tiktok_profile && (
+              <a href={`https://tiktok.com/@${profile.tiktok_profile}`} target="_blank" rel="noopener noreferrer">
+                TikTok
+              </a>
+            )}
+            {!profile.portfolio_url && !profile.instagram_profile && !profile.tiktok_profile && (
+                 <p>No hay enlaces disponibles</p>
+            )}
           </div>
-        </div>
-
-        <div className="info-section">
-          <h3>Biografía</h3>
-          <p className="bio-text">{profile.bio || 'No hay biografía disponible.'}</p>
         </div>
       </div>
-    </div>
-  );
-};
 
-export default ProfileSummary; 
+      <style jsx>{`
+        .profile-summary {
+          background: white;
+          border-radius: 12px;
+          padding: 2rem;
+          box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .profile-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          margin-bottom: 2rem;
+        }
+
+        .edit-button {
+          background: #0070f3;
+          color: white;
+          border: none;
+          padding: 0.75rem 1.5rem;
+          border-radius: 8px;
+          cursor: pointer;
+          font-weight: 500;
+        }
+
+        .profile-section {
+          margin-bottom: 2rem;
+        }
+
+        .profile-section:last-child {
+          margin-bottom: 0;
+        }
+
+        .profile-section h3 {
+          color: #333;
+          margin-bottom: 1rem;
+        }
+
+        .languages-list {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 0.5rem;
+        }
+
+        .language-tag {
+          background: #f0f0f0;
+          padding: 0.5rem 1rem;
+          border-radius: 20px;
+          font-size: 0.875rem;
+        }
+
+        .social-links {
+          display: flex;
+          gap: 1rem;
+          align-items: center;
+        }
+
+        .social-links a {
+          color: #0070f3;
+          text-decoration: none;
+        }
+
+        .social-links a:hover {
+          text-decoration: underline;
+        }
+
+        .social-links p {
+          margin: 0;
+        }
+      `}</style>
+    </motion.div>
+  );
+} 

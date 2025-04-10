@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 import { supabase } from '../utils/supabaseClient';
-import ProfileForm from '../components/ProfileForm';
+import ProfileForm, { Profile as ProfileType } from '../components/ProfileForm';
 import ProfileSummary from '../components/ProfileSummary';
 import JobApplications from '../components/JobApplications';
 import Head from 'next/head';
@@ -10,28 +10,38 @@ import { User } from '@supabase/supabase-js';
 
 const ProfilePage = () => {
   const router = useRouter();
-  const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [profile, setProfile] = useState<ProfileType | null>(null);
   const [isEditing, setIsEditing] = useState(false);
-
-  useEffect(() => {
-    checkUser();
-  }, []);
+  const [user, setUser] = useState<User | null>(null);
 
   const checkUser = async () => {
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
+      const { data: { user } } = await supabase.auth.getUser();
+      setUser(user);
+      if (!user) {
         router.push('/login');
         return;
       }
-      setUser(session.user);
-    } catch (error) {
-      console.error('Error:', error);
+
+      const { data: profileData, error: profileError } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', user.id)
+        .single();
+
+      if (profileError) throw profileError;
+      setProfile(profileData);
+    } catch (err) {
+      console.error('Error checking user:', err);
     } finally {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    checkUser();
+  }, [checkUser]);
 
   if (loading) {
     return (
@@ -64,7 +74,7 @@ const ProfilePage = () => {
               </p>
               
               <ProfileForm 
-                userId={user?.id || ''}
+                profile={profile}
                 onSuccess={() => {
                   setIsEditing(false);
                   window.location.reload();
@@ -74,7 +84,7 @@ const ProfilePage = () => {
           ) : (
             <>
               <ProfileSummary 
-                userId={user?.id || ''} 
+                profile={profile}
                 onEdit={() => setIsEditing(true)} 
               />
               

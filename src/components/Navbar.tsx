@@ -27,41 +27,26 @@ export default function Navbar() {
 
   const checkUser = async () => {
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      setUser(session?.user ?? null);
-
-      if (session?.user) {
-        const { data: profile } = await supabase
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        setUser(user);
+        // Verificar si el perfil está completo
+        const { data: profile, error: profileError } = await supabase
           .from('profiles')
-          .select('is_complete, role')
-          .eq('user_id', session.user.id)
+          .select('*')
+          .eq('id', user.id)
           .single();
-
-        if (profile) {
-          setIsProfileComplete(profile.is_complete || false);
-          setUserRole(profile.role);
-        } else {
-          // Si no existe el perfil, crear uno nuevo
-          const { data: newProfile, error } = await supabase
-            .from('profiles')
-            .insert([
-              { 
-                user_id: session.user.id,
-                is_complete: false,
-                role: 'user'
-              }
-            ])
-            .select()
-            .single();
-
-          if (newProfile) {
-            setIsProfileComplete(false);
-            setUserRole('user');
-          }
+        
+        if (profileError) {
+          console.error('Error al obtener el perfil:', profileError);
+          return;
         }
+        
+        setIsProfileComplete(profile?.is_complete || false);
+        setUserRole(profile?.role || null);
       }
-    } catch (error) {
-      console.error('Error checking user:', error);
+    } catch (err) {
+      console.error('Error al verificar el usuario:', err);
     }
   };
 

@@ -15,43 +15,29 @@ type Job = {
   created_at?: string; 
   is_remote: boolean;
   status: string;
+  type: string;
 };
 
-const JobsPage = () => {
+export default function JobsPage() {
   const [jobs, setJobs] = useState<Job[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [searchTerm, setSearchTerm] = useState('');
   const [filteredJobs, setFilteredJobs] = useState<Job[]>([]);
-
-  useEffect(() => {
-    fetchJobs();
-  }, []);
-
-  // Actualizar los trabajos filtrados cuando cambia el término de búsqueda o los trabajos
-  useEffect(() => {
-    filterJobs();
-  }, [searchTerm, jobs]);
+  const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedType, setSelectedType] = useState<string>('');
+  const [error, setError] = useState('');
 
   const fetchJobs = async () => {
     try {
-      setLoading(true);
-      
-      let query = supabase
+      const { data, error } = await supabase
         .from('jobs')
         .select('*')
-        .eq('status', 'active');
+        .order('created_at', { ascending: false });
       
-      const { data, error } = await query;
-      
-      if (error) {
-        throw error;
-      }
-      
+      if (error) throw error;
       setJobs(data || []);
       setFilteredJobs(data || []);
-    } catch (error: any) {
-      console.error('Error fetching jobs:', error);
+    } catch (err) {
+      console.error('Error fetching jobs:', err);
       setError('No se pudieron cargar las ofertas de trabajo. Por favor, inténtalo de nuevo más tarde.');
     } finally {
       setLoading(false);
@@ -59,24 +45,37 @@ const JobsPage = () => {
   };
 
   const filterJobs = useCallback(() => {
-    if (!searchTerm.trim()) {
-      setFilteredJobs(jobs);
-      return;
-    }
-    
-    const term = searchTerm.toLowerCase().trim();
-    const filtered = jobs.filter(job => 
-      (job.title && job.title.toLowerCase().includes(term)) ||
-      (job.company && job.company.toLowerCase().includes(term)) ||
-      (job.location && job.location.toLowerCase().includes(term)) ||
-      (job.description && job.description.toLowerCase().includes(term))
-    );
-    
-    setFilteredJobs(filtered);
-  }, [searchTerm, jobs]);
+    let filtered = jobs;
 
-  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (searchTerm) {
+      const term = searchTerm.toLowerCase();
+      filtered = filtered.filter(job => 
+        job.title.toLowerCase().includes(term) ||
+        job.description.toLowerCase().includes(term)
+      );
+    }
+
+    if (selectedType) {
+      filtered = filtered.filter(job => job.type === selectedType);
+    }
+
+    setFilteredJobs(filtered);
+  }, [jobs, searchTerm, selectedType]);
+
+  useEffect(() => {
+    fetchJobs();
+  }, []);
+
+  useEffect(() => {
+    filterJobs();
+  }, [filterJobs]);
+
+  const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSearchTerm(e.target.value);
+  };
+
+  const handleTypeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    setSelectedType(e.target.value);
   };
 
   const formatDate = (dateString?: string) => {
@@ -114,9 +113,21 @@ const JobsPage = () => {
                 type="text"
                 placeholder="Buscar por título, empresa o ubicación..."
                 value={searchTerm}
-                onChange={handleSearchChange}
+                onChange={handleSearch}
                 className="search-input"
               />
+            </div>
+            <div className="type-container">
+              <select
+                value={selectedType}
+                onChange={handleTypeChange}
+                className="type-select"
+              >
+                <option value="">Tipo de trabajo</option>
+                <option value="full-time">Tiempo completo</option>
+                <option value="part-time">Tiempo parcial</option>
+                <option value="remote">Remoto</option>
+              </select>
             </div>
           </div>
           
@@ -388,6 +399,4 @@ const JobsPage = () => {
       `}</style>
     </>
   );
-};
-
-export default JobsPage;
+}

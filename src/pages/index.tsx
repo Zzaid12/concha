@@ -6,6 +6,7 @@ import Layout from '../components/Layout';
 import Image from 'next/image';
 import { useInView } from 'react-intersection-observer';
 import { ReactNode } from 'react';
+import { User } from '@supabase/supabase-js';
 
 const FadeInWhenVisible = ({ children, delay = 0 }: { children: ReactNode; delay?: number }) => {
   const [ref, inView] = useInView({
@@ -26,29 +27,35 @@ const FadeInWhenVisible = ({ children, delay = 0 }: { children: ReactNode; delay
 };
 
 export default function Home() {
-  const [user, setUser] = useState<any>(null);
-  const [userRole, setUserRole] = useState<string | null>(null);
+  const [isProfileComplete, setIsProfileComplete] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const checkUser = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session?.user) {
-        setUser(session.user);
-        // Obtener el rol del usuario
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('role')
-          .eq('user_id', session.user.id)
-          .single();
-        
-        if (profile) {
-          setUserRole(profile.role);
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('is_complete')
+            .eq('id', user.id)
+            .single();
+          
+          setIsProfileComplete(profile?.is_complete || false);
         }
+      } catch (err) {
+        console.error('Error checking user:', err);
+      } finally {
+        setLoading(false);
       }
     };
 
     checkUser();
   }, []);
+
+  if (loading) {
+    return <div>Cargando...</div>;
+  }
 
   return (
     <Layout>

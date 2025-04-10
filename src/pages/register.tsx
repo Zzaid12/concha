@@ -12,53 +12,47 @@ const RegisterPage = () => {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
   const [messageType, setMessageType] = useState<'error' | 'success'>('error');
+  const [name, setName] = useState('');
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+    setLoading(true);
+    setMessage('');
+
     try {
-      setLoading(true);
-      setMessage('');
-      
-      const { data, error } = await supabase.auth.signUp({
+      const { error } = await supabase.auth.signUp({
         email,
         password,
+        options: {
+          data: {
+            full_name: name,
+          },
+        },
       });
-      
-      if (error) {
-        setMessageType('error');
-        setMessage(error.message);
-        return;
-      }
-      
-      if (!data.user) {
-        throw new Error('No se pudo crear la cuenta');
-      }
-      
+
+      if (error) throw error;
+
       // Crear perfil inicial
-      const { error: profileError } = await supabase
-        .from('profiles')
-        .insert([
-          {
-            id: data.user.id,
-            email: data.user.email,
-            is_complete: false,
-            role: 'user'
-          }
-        ]);
-        
-      if (profileError) {
-        console.error('Error al crear el perfil:', profileError);
-        setMessageType('error');
-        setMessage('Error al crear el perfil. Por favor, intenta de nuevo.');
-        return;
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const { error: profileError } = await supabase
+          .from('profiles')
+          .insert([
+            {
+              id: user.id,
+              full_name: name,
+              email: email,
+              is_complete: false,
+            },
+          ]);
+
+        if (profileError) throw profileError;
       }
-      
-      // Redirigir a la página de perfil para completar la información
-      router.push('/profile');
-    } catch (error: any) {
-      setMessageType('error');
-      setMessage(error.message || 'Error al crear la cuenta');
+
+      setMessage('¡Registro exitoso! Por favor, verifica tu correo electrónico.');
+      router.push('/login');
+    } catch (err) {
+      setMessage('Error al registrarse. Por favor, intenta nuevamente.');
     } finally {
       setLoading(false);
     }
@@ -107,6 +101,18 @@ const RegisterPage = () => {
                 id="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
+                required
+                style={{ position: 'relative', zIndex: 20 }}
+              />
+            </div>
+            
+            <div className="form-group">
+              <label htmlFor="name">Nombre</label>
+              <input
+                type="text"
+                id="name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
                 required
                 style={{ position: 'relative', zIndex: 20 }}
               />

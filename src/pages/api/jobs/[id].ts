@@ -61,17 +61,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         .eq('id', id)
         .single();
 
-      if (error) {
-        return res.status(500).json({ error: error.message });
-      }
-
-      if (!data) {
-        return res.status(404).json({ error: 'Oferta no encontrada' });
-      }
+      if (error) throw error;
 
       return res.status(200).json(data);
-    } catch (error: any) {
-      return res.status(500).json({ error: error.message || 'Error inesperado' });
+    } catch (err: unknown) {
+      console.error('Error fetching job:', err);
+      return res.status(500).json({ error: 'Error fetching job' });
     }
   }
 

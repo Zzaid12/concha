@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { supabase } from '../utils/supabaseClient';
 import { motion } from 'framer-motion';
 
-// Campos requeridos para completar el perfil
+// Campos requeridos para completar el perfil (ajustar según sea necesario)
 export const REQUIRED_FIELDS = [
   'first_name',
   'last_name',
@@ -10,54 +10,47 @@ export const REQUIRED_FIELDS = [
   'phone',
   'country',
   'city',
-  'bio',
-  'skills',
   'languages',
   'portfolio_url'
 ];
 
 // Interfaz para el perfil
 export interface Profile {
-  id?: string;
-  user_id: string;
-  first_name: string;
-  last_name: string;
+  user_id: string; // Clave foránea a auth.users.id
   email: string;
-  phone: string;
-  country: string;
-  city: string;
-  bio: string;
-  skills: string[];
-  languages: string[];
-  portfolio_url: string;
-  linkedin_url?: string;
-  github_url?: string;
-  is_complete: boolean;
-  created_at?: string;
-  updated_at?: string;
+  role?: string;
+  created_at?: string; // timestamp
+  first_name?: string;
+  last_name?: string;
+  phone?: string;
+  age?: number;
+  gender?: string;
+  country?: string;
+  city?: string;
+  languages?: string[]; // _text (array of text)
+  instagram_profile?: string;
+  tiktok_profile?: string;
+  portfolio_url?: string;
 }
 
 interface ProfileFormProps {
-  userId: string;
-  onProfileUpdate?: (profile: Profile) => void;
+  profile: Profile | null;
+  onSuccess: () => void;
 }
 
-export default function ProfileForm({ userId, onProfileUpdate }: ProfileFormProps) {
-  const [profile, setProfile] = useState<Profile>({
-    user_id: userId,
+export default function ProfileForm({ profile, onSuccess }: ProfileFormProps) {
+  const [profileData, setProfileData] = useState<Profile>({
+    user_id: '',
+    email: '',
     first_name: '',
     last_name: '',
-    email: '',
     phone: '',
     country: '',
     city: '',
-    bio: '',
-    skills: [],
     languages: [],
     portfolio_url: '',
-    linkedin_url: '',
-    github_url: '',
-    is_complete: false
+    instagram_profile: '',
+    tiktok_profile: '',
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -66,40 +59,36 @@ export default function ProfileForm({ userId, onProfileUpdate }: ProfileFormProp
   const [profileNotFound, setProfileNotFound] = useState(false);
 
   useEffect(() => {
-    fetchProfile();
-  }, [userId]);
-
-  const fetchProfile = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('user_id', userId)
-        .single();
-
-      if (error) {
-        if (error.code === 'PGRST116') {
-          setProfileNotFound(true);
-        }
-        throw error;
-      }
-
-      if (data) {
-        setProfile(data);
-        checkProfileCompletion(data);
-      }
-    } catch (error) {
-      console.error('Error cargando perfil:', error);
-      setMessage('Error al cargar el perfil');
-    } finally {
-      setLoading(false);
+    if (profile) {
+      setProfileData({
+        user_id: profile.user_id,
+        email: profile.email,
+        role: profile.role || '',
+        created_at: profile.created_at,
+        first_name: profile.first_name || '',
+        last_name: profile.last_name || '',
+        phone: profile.phone || '',
+        age: profile.age,
+        gender: profile.gender || '',
+        country: profile.country || '',
+        city: profile.city || '',
+        languages: profile.languages || [],
+        instagram_profile: profile.instagram_profile || '',
+        tiktok_profile: profile.tiktok_profile || '',
+        portfolio_url: profile.portfolio_url || '',
+      });
+      checkProfileCompletion(profile);
     }
-  };
+    setLoading(false);
+  }, [profile]);
 
-  const checkProfileCompletion = (profileData: Profile) => {
+  const checkProfileCompletion = (currentProfileData: Profile) => {
     const missing = REQUIRED_FIELDS.filter(field => {
-      const value = profileData[field as keyof Profile];
-      return !value || (Array.isArray(value) && value.length === 0);
+      const value = currentProfileData[field as keyof Profile];
+      if (Array.isArray(value)) {
+        return value.length === 0;
+      } 
+      return !value;
     });
     setMissingFields(missing);
   };
@@ -109,23 +98,24 @@ export default function ProfileForm({ userId, onProfileUpdate }: ProfileFormProp
     setSaving(true);
     setMessage('');
 
+    checkProfileCompletion(profileData);
+    const isComplete = missingFields.length === 0;
+
     try {
-      const isComplete = missingFields.length === 0;
-      const profileData = {
-        ...profile,
-        is_complete: isComplete,
+      const dataToSave = {
+        ...profileData,
         updated_at: new Date().toISOString()
       };
 
       const { error } = await supabase
         .from('profiles')
-        .upsert(profileData);
+        .upsert(dataToSave, { onConflict: 'user_id' });
 
       if (error) throw error;
 
       setMessage('Perfil guardado exitosamente');
-      if (onProfileUpdate) {
-        onProfileUpdate(profileData);
+      if (onSuccess) {
+        onSuccess();
       }
     } catch (error) {
       console.error('Error guardando perfil:', error);
@@ -137,40 +127,33 @@ export default function ProfileForm({ userId, onProfileUpdate }: ProfileFormProp
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
-    setProfile(prev => ({
-      ...prev,
-      [name]: value
-    }));
-    checkProfileCompletion({ ...profile, [name]: value });
-  };
-
-  const handleSkillsChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const skills = e.target.value.split(',').map(skill => skill.trim());
-    setProfile(prev => ({
-      ...prev,
-      skills
-    }));
-    checkProfileCompletion({ ...profile, skills });
+    const processedValue = name === 'age' ? (value === '' ? undefined : parseInt(value, 10)) : value;
+    
+    setProfileData(prev => {
+      const updatedData = { ...prev, [name]: processedValue };
+      checkProfileCompletion(updatedData);
+      return updatedData;
+    });
   };
 
   const handleLanguageAdd = (language: string) => {
-    if (language && !profile.languages.includes(language)) {
-      const updatedLanguages = [...profile.languages, language];
-      setProfile(prev => ({
-        ...prev,
-        languages: updatedLanguages
-      }));
-      checkProfileCompletion({ ...profile, languages: updatedLanguages });
+    if (language && !(profileData.languages || []).includes(language)) {
+      const updatedLanguages = [...(profileData.languages || []), language];
+      setProfileData(prev => {
+        const updatedData = { ...prev, languages: updatedLanguages };
+        checkProfileCompletion(updatedData);
+        return updatedData;
+      });
     }
   };
 
   const handleLanguageRemove = (languageToRemove: string) => {
-    const updatedLanguages = profile.languages.filter(lang => lang !== languageToRemove);
-    setProfile(prev => ({
-      ...prev,
-      languages: updatedLanguages
-    }));
-    checkProfileCompletion({ ...profile, languages: updatedLanguages });
+    const updatedLanguages = (profileData.languages || []).filter(lang => lang !== languageToRemove);
+    setProfileData(prev => {
+      const updatedData = { ...prev, languages: updatedLanguages };
+      checkProfileCompletion(updatedData);
+      return updatedData;
+    });
   };
 
   if (loading) {
@@ -241,122 +224,118 @@ export default function ProfileForm({ userId, onProfileUpdate }: ProfileFormProp
         </motion.div>
       )}
 
-      <form onSubmit={handleSubmit} className="profile-form">
+      <form onSubmit={handleSubmit} className="profile-form space-y-6">
         <div className="form-section">
           <h3>Información Personal</h3>
           <div className="form-grid">
             <div className="form-group">
-              <label htmlFor="first_name">Nombre *</label>
+              <label htmlFor="first_name">Nombre {REQUIRED_FIELDS.includes('first_name') ? '*' : ''}</label>
               <input
                 type="text"
                 id="first_name"
                 name="first_name"
-                value={profile.first_name}
+                value={profileData.first_name || ''} 
                 onChange={handleChange}
                 className={missingFields.includes('first_name') ? 'missing-field' : ''}
-                required
+                required={REQUIRED_FIELDS.includes('first_name')}
               />
             </div>
             <div className="form-group">
-              <label htmlFor="last_name">Apellido *</label>
+              <label htmlFor="last_name">Apellido {REQUIRED_FIELDS.includes('last_name') ? '*' : ''}</label>
               <input
                 type="text"
                 id="last_name"
                 name="last_name"
-                value={profile.last_name}
+                value={profileData.last_name || ''}
                 onChange={handleChange}
                 className={missingFields.includes('last_name') ? 'missing-field' : ''}
-                required
+                required={REQUIRED_FIELDS.includes('last_name')}
               />
             </div>
             <div className="form-group">
-              <label htmlFor="email">Email *</label>
+              <label htmlFor="email">Email {REQUIRED_FIELDS.includes('email') ? '*' : ''}</label>
               <input
                 type="email"
                 id="email"
                 name="email"
-                value={profile.email}
+                value={profileData.email || ''} 
                 onChange={handleChange}
                 className={missingFields.includes('email') ? 'missing-field' : ''}
-                required
+                required={REQUIRED_FIELDS.includes('email')}
               />
             </div>
             <div className="form-group">
-              <label htmlFor="phone">Teléfono *</label>
+              <label htmlFor="phone">Teléfono {REQUIRED_FIELDS.includes('phone') ? '*' : ''}</label>
               <input
                 type="tel"
                 id="phone"
                 name="phone"
-                value={profile.phone}
+                value={profileData.phone || ''} 
                 onChange={handleChange}
                 className={missingFields.includes('phone') ? 'missing-field' : ''}
-                required
+                required={REQUIRED_FIELDS.includes('phone')}
               />
             </div>
             <div className="form-group">
-              <label htmlFor="country">País *</label>
+              <label htmlFor="age">Edad {REQUIRED_FIELDS.includes('age') ? '*' : ''}</label>
+              <input
+                type="number"
+                id="age"
+                name="age"
+                value={profileData.age || ''} 
+                onChange={handleChange}
+                className={missingFields.includes('age') ? 'missing-field' : ''}
+                required={REQUIRED_FIELDS.includes('age')}
+              />
+            </div>
+            <div className="form-group">
+              <label htmlFor="gender">Género {REQUIRED_FIELDS.includes('gender') ? '*' : ''}</label>
+              <input
+                type="text"
+                id="gender"
+                name="gender"
+                value={profileData.gender || ''} 
+                onChange={handleChange}
+                className={missingFields.includes('gender') ? 'missing-field' : ''}
+                required={REQUIRED_FIELDS.includes('gender')}
+              />
+            </div>
+            <div className="form-group">
+              <label htmlFor="country">País {REQUIRED_FIELDS.includes('country') ? '*' : ''}</label>
               <input
                 type="text"
                 id="country"
                 name="country"
-                value={profile.country}
+                value={profileData.country || ''} 
                 onChange={handleChange}
                 className={missingFields.includes('country') ? 'missing-field' : ''}
-                required
+                required={REQUIRED_FIELDS.includes('country')}
               />
             </div>
             <div className="form-group">
-              <label htmlFor="city">Ciudad *</label>
+              <label htmlFor="city">Ciudad {REQUIRED_FIELDS.includes('city') ? '*' : ''}</label>
               <input
                 type="text"
                 id="city"
                 name="city"
-                value={profile.city}
+                value={profileData.city || ''} 
                 onChange={handleChange}
                 className={missingFields.includes('city') ? 'missing-field' : ''}
-                required
+                required={REQUIRED_FIELDS.includes('city')}
               />
             </div>
           </div>
         </div>
 
         <div className="form-section">
-          <h3>Biografía y Habilidades</h3>
-          <div className="form-group">
-            <label htmlFor="bio">Biografía *</label>
-            <textarea
-              id="bio"
-              name="bio"
-              value={profile.bio}
-              onChange={handleChange}
-              className={missingFields.includes('bio') ? 'missing-field' : ''}
-              rows={4}
-              required
-            />
-          </div>
-          <div className="form-group">
-            <label htmlFor="skills">Habilidades * (separadas por comas)</label>
-            <input
-              type="text"
-              id="skills"
-              name="skills"
-              value={profile.skills.join(', ')}
-              onChange={handleSkillsChange}
-              className={missingFields.includes('skills') ? 'missing-field' : ''}
-              required
-            />
-          </div>
-        </div>
-
-        <div className="form-section">
-          <h3>Idiomas</h3>
+          <h3>Idiomas {REQUIRED_FIELDS.includes('languages') ? '*' : ''}</h3>
           <div className="form-group">
             <div className="language-input">
               <input
                 type="text"
-                placeholder="Agregar idioma"
-                onKeyPress={(e) => {
-                  if (e.key === 'Enter') {
+                placeholder="Agregar idioma y presionar Enter"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && e.currentTarget.value) {
                     e.preventDefault();
                     handleLanguageAdd((e.target as HTMLInputElement).value);
                     (e.target as HTMLInputElement).value = '';
@@ -364,8 +343,8 @@ export default function ProfileForm({ userId, onProfileUpdate }: ProfileFormProp
                 }}
               />
             </div>
-            <div className="languages-list">
-              {profile.languages.map(language => (
+            <div className={`languages-list ${missingFields.includes('languages') ? 'missing-field-container' : ''}`}>
+              {(profileData.languages || []).map(language => (
                 <div key={language} className="language-tag">
                   <span>{language}</span>
                   <button
@@ -378,6 +357,7 @@ export default function ProfileForm({ userId, onProfileUpdate }: ProfileFormProp
                 </div>
               ))}
             </div>
+             {missingFields.includes('languages') && <span className="missing-field-text">Se requiere al menos un idioma</span>}
           </div>
         </div>
 
@@ -385,35 +365,39 @@ export default function ProfileForm({ userId, onProfileUpdate }: ProfileFormProp
           <h3>Enlaces</h3>
           <div className="form-grid">
             <div className="form-group">
-              <label htmlFor="portfolio_url">URL del Portfolio *</label>
+              <label htmlFor="portfolio_url">URL del Portfolio {REQUIRED_FIELDS.includes('portfolio_url') ? '*' : ''}</label>
               <input
                 type="url"
                 id="portfolio_url"
                 name="portfolio_url"
-                value={profile.portfolio_url}
+                value={profileData.portfolio_url || ''} 
                 onChange={handleChange}
                 className={missingFields.includes('portfolio_url') ? 'missing-field' : ''}
-                required
+                required={REQUIRED_FIELDS.includes('portfolio_url')}
               />
             </div>
             <div className="form-group">
-              <label htmlFor="linkedin_url">URL de LinkedIn</label>
+              <label htmlFor="instagram_profile">Perfil Instagram {REQUIRED_FIELDS.includes('instagram_profile') ? '*' : ''}</label>
               <input
-                type="url"
-                id="linkedin_url"
-                name="linkedin_url"
-                value={profile.linkedin_url}
+                type="text"
+                id="instagram_profile"
+                name="instagram_profile"
+                value={profileData.instagram_profile || ''} 
                 onChange={handleChange}
+                className={missingFields.includes('instagram_profile') ? 'missing-field' : ''}
+                required={REQUIRED_FIELDS.includes('instagram_profile')}
               />
             </div>
             <div className="form-group">
-              <label htmlFor="github_url">URL de GitHub</label>
+              <label htmlFor="tiktok_profile">Perfil TikTok {REQUIRED_FIELDS.includes('tiktok_profile') ? '*' : ''}</label>
               <input
-                type="url"
-                id="github_url"
-                name="github_url"
-                value={profile.github_url}
+                type="text"
+                id="tiktok_profile"
+                name="tiktok_profile"
+                value={profileData.tiktok_profile || ''} 
                 onChange={handleChange}
+                className={missingFields.includes('tiktok_profile') ? 'missing-field' : ''}
+                required={REQUIRED_FIELDS.includes('tiktok_profile')}
               />
             </div>
           </div>

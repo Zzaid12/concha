@@ -17,14 +17,40 @@ interface CreateJobFormProps {
   editJob?: Job | null;
 }
 
+interface FormData {
+  title: string;
+  company: string;
+  location: string;
+  description: string;
+  requirements: string;
+  salary: string;
+  type: string;
+  experience: string;
+  skills: string[];
+  benefits: string[];
+  contact_email: string;
+  application_url: string;
+  deadline: string;
+  status: 'active' | 'proceso de seleccion';
+}
+
 export default function CreateJobForm({ onClose, onSuccess, editJob }: CreateJobFormProps) {
-  const [title, setTitle] = useState(editJob?.title || '');
-  const [description, setDescription] = useState(editJob?.description || '');
-  const [salaryRange, setSalaryRange] = useState(editJob?.salary_range || '');
-  const [expiresAt, setExpiresAt] = useState(
-    editJob?.expires_at ? new Date(editJob.expires_at).toISOString().split('T')[0] : ''
-  );
-  const [status, setStatus] = useState<'active' | 'proceso de seleccion'>(editJob?.status || 'active');
+  const [formData, setFormData] = useState<FormData>({
+    title: editJob?.title || '',
+    company: '',
+    location: '',
+    description: editJob?.description || '',
+    requirements: '',
+    salary: editJob?.salary_range || '',
+    type: '',
+    experience: '',
+    skills: [],
+    benefits: [],
+    contact_email: '',
+    application_url: '',
+    deadline: editJob?.expires_at ? new Date(editJob.expires_at).toISOString().split('T')[0] : '',
+    status: editJob?.status || 'active'
+  });
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -35,16 +61,16 @@ export default function CreateJobForm({ onClose, onSuccess, editJob }: CreateJob
 
     try {
       // Validación
-      if (!title.trim() || !description.trim() || !salaryRange.trim() || !expiresAt) {
+      if (!formData.title.trim() || !formData.description.trim() || !formData.salary.trim() || !formData.deadline) {
         throw new Error('Por favor completa todos los campos requeridos');
       }
 
       const jobData = {
-        title: title.trim(),
-        description: description.trim(),
-        salary_range: salaryRange.trim(),
-        expires_at: new Date(expiresAt).toISOString(),
-        status,
+        title: formData.title.trim(),
+        description: formData.description.trim(),
+        salary_range: formData.salary.trim(),
+        expires_at: new Date(formData.deadline).toISOString(),
+        status: formData.status,
         updated_at: new Date().toISOString()
       };
 
@@ -90,8 +116,8 @@ export default function CreateJobForm({ onClose, onSuccess, editJob }: CreateJob
           <input
             id="title"
             type="text"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
+            value={formData.title}
+            onChange={(e) => setFormData({ ...formData, title: e.target.value })}
             placeholder="ej: Desarrollador Frontend Senior"
             required
           />
@@ -101,8 +127,8 @@ export default function CreateJobForm({ onClose, onSuccess, editJob }: CreateJob
           <label htmlFor="description">Descripción*</label>
           <textarea
             id="description"
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
+            value={formData.description}
+            onChange={(e) => setFormData({ ...formData, description: e.target.value })}
             placeholder="Describe los requisitos y responsabilidades del puesto"
             rows={5}
             required
@@ -114,8 +140,8 @@ export default function CreateJobForm({ onClose, onSuccess, editJob }: CreateJob
           <input
             id="salary"
             type="text"
-            value={salaryRange}
-            onChange={(e) => setSalaryRange(e.target.value)}
+            value={formData.salary}
+            onChange={(e) => setFormData({ ...formData, salary: e.target.value })}
             placeholder="ej: 40,000€ - 50,000€"
             required
           />
@@ -127,8 +153,8 @@ export default function CreateJobForm({ onClose, onSuccess, editJob }: CreateJob
             <input
               id="expires"
               type="date"
-              value={expiresAt}
-              onChange={(e) => setExpiresAt(e.target.value)}
+              value={formData.deadline}
+              onChange={(e) => setFormData({ ...formData, deadline: e.target.value })}
               min={new Date().toISOString().split('T')[0]}
               required
             />
@@ -138,8 +164,8 @@ export default function CreateJobForm({ onClose, onSuccess, editJob }: CreateJob
             <label htmlFor="status">Estado</label>
             <select
               id="status"
-              value={status}
-              onChange={(e) => setStatus(e.target.value as 'active' | 'proceso de seleccion')}
+              value={formData.status}
+              onChange={(e) => setFormData({ ...formData, status: e.target.value as 'active' | 'proceso de seleccion' })}
             >
               <option value="active">Activa</option>
               <option value="proceso de seleccion">Proceso de selección</option>

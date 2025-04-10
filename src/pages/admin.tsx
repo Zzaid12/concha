@@ -11,13 +11,19 @@ interface Job {
   status: 'active' | 'proceso de seleccion';
 }
 
-export default function Admin() {
+interface User {
+  id: string;
+  // Add any other necessary properties
+}
+
+export default function AdminPage() {
   const router = useRouter();
-  const [loading, setLoading] = useState(true);
-  const [userRole, setUserRole] = useState('');
+  const [user, setUser] = useState<User | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [jobs, setJobs] = useState<Job[]>([]);
-  const [editingJob, setEditingJob] = useState<Job | null>(null);
-  const [showForm, setShowForm] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [showCreateForm, setShowCreateForm] = useState(false);
+  const [editJob, setEditJob] = useState<Job | null>(null);
 
   // Form state
   const [title, setTitle] = useState('');
@@ -27,116 +33,53 @@ export default function Admin() {
   const [status, setStatus] = useState<'active' | 'proceso de seleccion'>('active');
   const [message, setMessage] = useState('');
 
-  useEffect(() => {
-    const initializeDatabase = async () => {
-      try {
-        // Crear políticas necesarias
-        await supabase.rpc('exec_sql', {
-          sql_string: `
-            -- Política para permitir a los administradores eliminar ofertas
-            CREATE POLICY IF NOT EXISTS "Permitir eliminar ofertas a administradores" ON jobs
-            FOR DELETE 
-            TO authenticated
-            USING (
-              EXISTS (
-                SELECT 1 FROM profiles
-                WHERE profiles.user_id = auth.uid()
-                AND profiles.role = 'admin'
-              )
-            );
-
-            -- Asegurar que las políticas RLS están activadas
-            ALTER TABLE jobs ENABLE ROW LEVEL SECURITY;
-
-            -- Política para insertar ofertas
-            CREATE POLICY IF NOT EXISTS "Permitir insertar ofertas a administradores" ON jobs
-            FOR INSERT 
-            TO authenticated
-            WITH CHECK (
-              EXISTS (
-                SELECT 1 FROM profiles
-                WHERE profiles.user_id = auth.uid()
-                AND profiles.role = 'admin'
-              )
-            );
-
-            -- Política para actualizar ofertas
-            CREATE POLICY IF NOT EXISTS "Permitir actualizar ofertas a administradores" ON jobs
-            FOR UPDATE 
-            TO authenticated
-            USING (
-              EXISTS (
-                SELECT 1 FROM profiles
-                WHERE profiles.user_id = auth.uid()
-                AND profiles.role = 'admin'
-              )
-            );
-
-            -- Añadir columnas faltantes
-            ALTER TABLE jobs
-            ADD COLUMN IF NOT EXISTS status varchar(20) DEFAULT 'active',
-            ADD COLUMN IF NOT EXISTS expires_at timestamp with time zone;
-
-            UPDATE jobs
-            SET status = 'active'
-            WHERE status IS NULL;
-          `
-        });
-      } catch (error) {
-        console.error('Error initializing database:', error);
-      }
-    };
-
-    initializeDatabase();
-    checkAdmin();
-    fetchJobs();
-  }, []);
-
   const checkAdmin = async () => {
-    const { data: { user }, error } = await supabase.auth.getUser();
-
-    if (error || !user) {
-      router.push('/');
-      return;
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        setUser(user);
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('role')
+          .eq('id', user.id)
+          .single();
+        
+        setIsAdmin(profile?.role === 'admin');
+      }
+    } catch (err) {
+      console.error('Error checking admin status:', err);
     }
-
-    const { data: profile, error: profileError } = await supabase
-      .from('profiles')
-      .select('role')
-      .eq('user_id', user.id)
-      .maybeSingle();
-
-    if (profileError || !profile || profile.role !== 'admin') {
-      router.push('/');
-      return;
-    }
-
-    setUserRole(profile.role);
-    setLoading(false);
   };
 
   const fetchJobs = async () => {
-    const { data, error } = await supabase
-      .from('jobs')
-      .select('*')
-      .order('id', { ascending: false });
-
-    if (error) {
-      console.error('Error fetching jobs:', error);
-      return;
+    try {
+      const { data, error } = await supabase
+        .from('jobs')
+        .select('*')
+        .order('created_at', { ascending: false });
+      
+      if (error) throw error;
+      setJobs(data || []);
+    } catch (err) {
+      console.error('Error fetching jobs:', err);
+    } finally {
+      setLoading(false);
     }
-
-    setJobs(data || []);
   };
 
+  useEffect(() => {
+    checkAdmin();
+    fetchJobs();
+  }, [checkAdmin, fetchJobs]);
+
   const handleEdit = (job: Job) => {
-    setEditingJob(job);
+    setEditJob(job);
     setTitle(job.title);
     setDescription(job.description);
     setSalaryRange(job.salary_range);
     setStatus(job.status);
     setExpiresAt(job.expires_at ? new Date(job.expires_at).toISOString().split('T')[0] : '');
-    setShowForm(true);
+    setShowCreateForm(true);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -157,12 +100,12 @@ export default function Admin() {
         status
       };
 
-      if (editingJob) {
+      if (editJob) {
         // Update existing job
         const { error } = await supabase
           .from('jobs')
           .update(jobData)
-          .eq('id', editingJob.id);
+          .eq('id', editJob.id);
 
         if (error) throw error;
         alert('Oferta actualizada con éxito');
@@ -177,8 +120,8 @@ export default function Admin() {
       }
 
       // Reset form and refresh jobs
-      setShowForm(false);
-      setEditingJob(null);
+      setShowCreateForm(false);
+      setEditJob(null);
       resetForm();
       fetchJobs();
     } catch (error: any) {
@@ -202,36 +145,24 @@ export default function Admin() {
 
   const handleDelete = async (jobId: string) => {
     try {
-      alert('Función handleDelete llamada con ID: ' + jobId);
-      
-      if (!confirm('¿Estás seguro de que deseas eliminar esta oferta?')) {
-        return;
-      }
+      const { error } = await supabase
+        .from('jobs')
+        .delete()
+        .eq('id', jobId);
 
-      console.log('Intentando eliminar oferta con ID:', jobId, typeof jobId);
-
-      // Eliminar directamente con SQL
-      const { error } = await supabase.rpc('exec_sql', {
-        sql_string: `DELETE FROM public.jobs WHERE id = $1`,
-        params: [jobId]
-      });
-
-      if (error) {
-        console.error('Error al eliminar la oferta:', error);
-        alert('Error al eliminar la oferta: ' + error.message);
-        return;
-      }
-
-      alert('Oferta eliminada con éxito');
-      fetchJobs(); // Recargar la lista de ofertas
+      if (error) throw error;
+      fetchJobs();
     } catch (err) {
-      console.error('Error inesperado:', err);
-      alert('Ha ocurrido un error inesperado');
+      console.error('Error deleting job:', err);
     }
   };
 
   if (loading) {
     return <div className="loading-container">Cargando...</div>;
+  }
+
+  if (!isAdmin) {
+    return <div>No tienes permisos para acceder a esta página</div>;
   }
 
   return (
@@ -252,17 +183,17 @@ export default function Admin() {
         <button 
           className="create-button"
           onClick={() => {
-            setEditingJob(null);
+            setEditJob(null);
             resetForm();
-            setShowForm(!showForm);
+            setShowCreateForm(!showCreateForm);
           }}
         >
-          {showForm ? 'Cancelar' : 'Crear nueva oferta'}
+          {showCreateForm ? 'Cancelar' : 'Crear nueva oferta'}
         </button>
 
-        {showForm && (
+        {showCreateForm && (
           <form className="job-form" onSubmit={handleSubmit}>
-            <h2>{editingJob ? 'Editar Oferta' : 'Crear Nueva Oferta'}</h2>
+            <h2>{editJob ? 'Editar Oferta' : 'Crear Nueva Oferta'}</h2>
             <div className="form-group">
               <input
                 type="text"
@@ -308,7 +239,7 @@ export default function Admin() {
               </select>
             </div>
             <button type="submit" className="submit-button">
-              {editingJob ? 'Actualizar Oferta' : 'Crear Oferta'}
+              {editJob ? 'Actualizar Oferta' : 'Crear Oferta'}
             </button>
           </form>
         )}
@@ -344,19 +275,7 @@ export default function Admin() {
                         e.preventDefault();
                         alert('Eliminar oferta: ' + job.id);
                         if (confirm('¿Estás seguro de que deseas eliminar esta oferta?')) {
-                          supabase
-                            .from('jobs')
-                            .delete()
-                            .eq('id', job.id)
-                            .then(({ error }) => {
-                              if (error) {
-                                console.error('Error al eliminar:', error);
-                                alert('Error: ' + error.message);
-                              } else {
-                                alert('Oferta eliminada con éxito');
-                                fetchJobs();
-                              }
-                            });
+                          handleDelete(job.id);
                         }
                       }}
                     >
